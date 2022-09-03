@@ -1,0 +1,11 @@
+steps:
+1. Load the training and test data 
+2. Choose the value of K 
+3. For each point in test data:
+       - find the Euclidean distance to all training data points
+       - store the Euclidean distances in a list and sort it 
+       - choose the first k points 
+       - assign a class to the test point based on the majority of classes present in the chosen points
+4. End 
+
+source: https://towardsdatascience.com/k-nearest-neighbours-introduction-to-machine-learning-algorithms-18e7ce3d802a
