@@ -51,7 +51,7 @@ int main() {
         return a + (double) rand() / RAND_MAX * (b-a);
     };
 
-    auto rd_class = [] (int a=0, int b=CLASS_NUM+1) {
+    auto rd_class = [] (int a=0, int b=CLASS_NUM) {
         return a + (int) ((double) rand() / RAND_MAX * (double) (b-a));
     };
 
