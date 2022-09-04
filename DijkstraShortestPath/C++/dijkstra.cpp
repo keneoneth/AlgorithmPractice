@@ -112,7 +112,7 @@ int main() {
     priority_queue<NODE_M,vector<NODE_M>,NODE_M::greater> min_priq_node;
     min_priq_node.push(NODE_M(s,0.0));
 
-    // // find the shortest path from source s to each node
+    // find the shortest path from source s to each node
     map<int,int> prev_info_map; //store the prev node to key node
 
     while(min_priq_node.size()>0){
@@ -130,7 +130,8 @@ int main() {
         }
     }
 
-    // // list all dist and prev info
+    // list all dist and prev info
+    cout << "[dij] min dist to each node and their prev node : ";
     for (int i=0; i < NODE_NUM; i++){
         cout << "node : " << i << " | ";
         cout << "dist : " << dist_info_vec[i] << " | ";
