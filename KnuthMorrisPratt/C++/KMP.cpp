@@ -94,8 +94,9 @@ int main(int argc, char** argv) {
             }
         }
 
-        cout << "precompute table T: ";
+        cout << "matching indexes: ";
         print_vec(P); // show table
+        cout << "total matches: " << nP << endl;
 
     } else {
         cout << "[warning] please enter input string W and search string S as the first two arguments" << endl;
