@@ -5,3 +5,5 @@ project(ALGO_PRACTICE VERSION 1.0)
 add_subdirectory(KNearestNeighbour/C++/)
 
 add_subdirectory(DijkstraShortestPath/C++/)
+
+add_subdirectory(KnuthMorrisPratt/C++/)
