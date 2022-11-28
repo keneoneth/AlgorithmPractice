@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include <iostream>
+#include <map>
 
 #include "clang/Frontend/FrontendPluginRegistry.h"
 #include "clang/AST/AST.h"
@@ -20,11 +21,15 @@
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Sema/Sema.h"
 #include "llvm/Support/raw_ostream.h"
+#include "clang/Rewrite/Core/Rewriter.h"
+#include "clang/Rewrite/Frontend/Rewriters.h"
+#include "clang/Tooling/RefactoringCallbacks.h"
 
 // #include "clang/AST/ASTMatchers.…h"
 
 
 using namespace clang;
+using namespace std;
 
 namespace {
 
@@ -45,24 +50,46 @@ namespace {
 //   }
 // };
 
+
+
 struct Visitor : public RecursiveASTVisitor<Visitor> {
   const std::set<std::string> &ParsedTemplates;
+  map<std::string,FunctionDecl*> decl_map;
+
   CompilerInstance &Instance;
-  Visitor(const std::set<std::string> &ParsedTemplates, CompilerInstance &Instance)
-      : ParsedTemplates(ParsedTemplates), Instance(Instance) {}
+  ASTContext &Context;
+
+  Visitor(const std::set<std::string> &ParsedTemplates, CompilerInstance &Instance, ASTContext &context)
+      : ParsedTemplates(ParsedTemplates), Instance(Instance),Context(context) {}
 
   bool VisitDecl(Decl *Declaration) {
     // For debugging, dumping the AST nodes will show which nodes are already
     // being visited.
     // Declaration->dump();
     auto fname = Instance.getSourceManager().getFilename(Declaration->getLocation()).data();
-    if (fname!=nullptr && strcmp(fname,"try_llvm.cc")==0) {
+    if (fname!=nullptr && strcmp(fname,"try_func.cc")==0) {
       printf("@@ Declaration->getQualifiedNameAsString() %s\n",Declaration->getDeclKindName () );
       
       printf("@@ filename %s\n",fname);
       printf("@@ src location %s\n",Declaration->getLocation().printToString(Instance.getSourceManager()).c_str());
       // The return value indicates whether we want the visitation to proceed.
       // Return false to stop the traversal of the AST.
+      auto& attrvec = Declaration->getAttrs();
+      for (auto * attr : attrvec) {
+        if (attr->getKind()==attr::Annotate) {
+          printf("attr %s\n",attr->getSpelling());
+          const auto * AAT = dyn_cast<AnnotateAttr>(attr);
+          printf("AAT %s\n",AAT->getAnnotation().data());
+          if (strcmp(AAT->getAnnotation().data(),"offset")==0) {
+            FunctionDecl * funcdecl = dyn_cast<FunctionDecl>(Declaration);
+            if (funcdecl!=nullptr) {
+              printf("Add funcdecl %s\n",AAT->getAnnotation().data());
+              decl_map[AAT->getAnnotation().data()] = funcdecl;
+            }
+          }
+        }
+      }
+
     }
     return true;
   }
@@ -70,7 +97,7 @@ struct Visitor : public RecursiveASTVisitor<Visitor> {
   bool VisitStmt(Stmt *Statement) {
 
     auto fname = Instance.getSourceManager().getFilename(Statement->getBeginLoc()).data();
-    if (fname!=nullptr && strcmp(fname,"try_llvm.cc")==0) {
+    if (fname!=nullptr && strcmp(fname,"try_func.cc")==0) {
       printf("@@ getStmtClassName %s\n",Statement->getStmtClassName());
 
       printf("@@ filename %s\n",fname);
@@ -83,19 +110,19 @@ struct Visitor : public RecursiveASTVisitor<Visitor> {
         printf("@@@ DRExpr Q getType %s\n", qtype.getAsString().c_str());
         printf("@@@ DRExpr Q customQualifier %d\n",qtype.customQualifier);
         // float *
-        const Type * type = qtype.getTypePtrOrNull();
-        if (type!=nullptr){
-          const auto *A = dyn_cast<AttributedType>(type);
-          if (A!=nullptr){
-            auto attrkind = A->getAttrKind() ;
-            printf("@@@@@ type attrkind: %d",attrkind);
-          }
-        }
+        const Type * pt_type = qtype.getTypePtrOrNull();
+        // if (type!=nullptr){
+        //   const auto *A = dyn_cast<AttributedType>(type);
+        //   if (A!=nullptr){
+        //     auto attrkind = A->getAttrKind() ;
+        //     printf("@@@@@ type attrkind: %d",attrkind);
+        //   }
+        // }
 
-        QualType pt_qtype = type->getPointeeType();
+        // QualType pt_qtype = type->getPointeeType();
         
-        printf("@@@@ DRExpr getType %s\n", pt_qtype.getAsString().c_str());
-        printf("@@@@ DRExpr customQualifier %d\n",pt_qtype.customQualifier);
+        // printf("@@@@ DRExpr getType %s\n", pt_qtype.getAsString().c_str());
+        // printf("@@@@ DRExpr customQualifier %d\n",pt_qtype.customQualifier);
 
         // const Type * pt_type = pt_qtype.getTypePtrOrNull();
 
@@ -103,15 +130,60 @@ struct Visitor : public RecursiveASTVisitor<Visitor> {
           // const auto *A = dyn_cast<AttributedType>(pt_type);
           const auto *A = pt_type->getAs<AttributedType>();
           if (A!=nullptr){
-            auto attrkind = A->getAttrKind();
-            printf("@@@@@ attrkind: %d\n",attrkind);
-            printf("@@@@@ attrkind==: %d\n",attrkind==attr::MyShared);
-            // const AnnotateTypeAttr * pt_type = pt_qtype.getTypePtrOrNull();
-            const auto *Annotate = dyn_cast<AnnotateTypeAttr>(AttributedTL.getAttr())
-            if (pt_type!=nullptr){
 
-               printf("@@@@@ annotationtype==: %s\n",pt_type->getAnnotation().data());
+            if (A->getAttrKind()==attr::AnnotateType) {
+              printf("foundannotatetype\n");
+
+
+              // CallExpr * callexpr = CallExpr::Create(const ASTContext &Ctx, Expr *Fn, ArrayRef< Expr * > Args, QualType Ty, ExprValueKind VK, SourceLocation RParenLoc, FPOptionsOverride FPFeatures, unsigned MinNumArgs=0, ADLCallKind UsesADL=NotADL)
+              FunctionDecl * FDecl = decl_map["offset"];
+              // Expr * Fn = dyn_cast<Expr>(decl_map["offset"]);
+              // DeclRefExpr (const ASTContext &Ctx, ValueDecl *D, bool RefersToEnclosingVariableOrCapture, QualType T, ExprValueKind VK, SourceLocation L, const DeclarationNameLoc &LocInfo=DeclarationNameLoc(), NonOdrUseReason NOUR=NOUR_None)
+              Expr * curExpr = dyn_cast<Expr>(DRExpr);
+
+              Expr * Fn = dyn_cast<Expr>(DeclRefExpr::Create(
+                Context, 
+                FDecl->getQualifierLoc(),
+                curExpr->getExprLoc(),
+                FDecl,
+                false,
+                curExpr->getExprLoc(),
+                FDecl->getCallResultType(), 
+                curExpr->getValueKind(),
+                FDecl));
+
+              
+              ArrayRef< Expr * > Args = {curExpr};
+
+
+              CallExpr * callexpr = CallExpr::Create(Context,Fn,Args,FDecl->getCallResultType(),curExpr->getValueKind(), curExpr->getExprLoc(),curExpr->getFPFeaturesInEffect(Instance.getLangOpts()));
+
+              printf("madecallexpr\n");
+
+              // Statement = dyn_cast<Stmt>(callexpr);
+              // printf("updated getStmtClassName %s\n",Statement->getStmtClassName());
+              Rewriter TheRewriter;
+              TheRewriter.setSourceMgr(Instance.getSourceManager(), Instance.getLangOpts());
+              
+              auto callstmt = dyn_cast<Stmt>(callexpr);
+              // clang::tooling::ReplaceStmtWithStmt trial;
+              // auto src = Lexer::getSourceText(CharSourceRange::getCharRange(Statement.getSourceRange()), Instance.getSourceManager(), Instance.getLangOpts());
+              // auto dst = Lexer::getSourceText(CharSourceRange::getCharRange(callstmt.getSourceRange()), Instance.getSourceManager(), Instance.getLangOpts());
+              // llvm::StringRef ref = Lexer::getSourceText(CharSourceRange::getCharRange(range), *SM, LangOptions());
+
+              TheRewriter.ReplaceText(Statement->getSourceRange(),callstmt->getSourceRange());
+
+              // trial.ReplaceStmtWithStmt(src, dst);
             }
+            // auto attrkind = A->getAttrKind();
+            // printf("@@@@@ attrkind: %d\n",attrkind);
+            // printf("@@@@@ attrkind==: %d\n",attrkind==attr::MyShared);
+            // // const AnnotateTypeAttr * pt_type = pt_qtype.getTypePtrOrNull();
+            // const auto *Annotate = dyn_cast<AnnotateTypeAttr>(AttributedTL.getAttr())
+            // if (pt_type!=nullptr){
+
+            //    printf("@@@@@ annotationtype==: %s\n",pt_type->getAnnotation().data());
+            // }
 
             // TypeSourceInfo *DI = nullptr;
             // if (const LocInfoType *LIT = dyn_cast<LocInfoType>(QT)) {
@@ -121,6 +193,9 @@ struct Visitor : public RecursiveASTVisitor<Visitor> {
            
           }
         }
+
+
+        
 
       }
       
@@ -190,7 +265,7 @@ public:
     // The advantage of doing this in HandleTranslationUnit() is that all
     // codegen (when using -add-plugin) is completely finished and this can't
     // affect the compiler output.
-    Visitor v(ParsedTemplates,Instance);
+    Visitor v(ParsedTemplates,Instance,context);
     
     v.TraverseDecl(context.getTranslationUnitDecl());
 
