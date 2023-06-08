@@ -265,3 +265,17 @@ import shutil
 shutil.copyfile(source_path,os.path.join("./",os.path.basename(source_path)))
 with open(source_path, 'r') as f:
     print(f.read())
+
+
+
+def visit_Address(self, e: Address):
+    print('visit address',type(e.expr),e.expr)
+    if type(e.expr) == TensorElement:
+        print(e.expr,e.expr.base,type(e.expr.base),e.expr.indices,type(e.expr.indices))
+        print(type(self.visit(e.expr.base)),self.visit(e.expr.base))
+        print(type(self.visit(e.expr.indices)),self.visit(e.expr.indices))
+        print(type(Text('&') + self.visit(e.expr)))
+        print(type(Text('&')),type(self.visit(e.expr)))
+        return self.visit(e.expr.base) + Text('+') + self.visit(e.expr.indices)
+    else:
+        return Text('&') + self.visit(e.expr)
